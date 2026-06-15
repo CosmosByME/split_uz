@@ -1,39 +1,52 @@
-import 'package:flutter/cupertino.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:split_uz/presentation/home/widgets/owing_status.dart';
-import 'package:split_uz/presentation/home/widgets/recent_splits.dart';
+import 'package:split_uz/data/model/user.dart';
+import 'package:split_uz/domain/repository/user_repository_impl.dart';
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+class HomePage extends StatefulWidget {
+  final UserModel? initialUser;
+  const HomePage({super.key, this.initialUser});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  late Future<UserModel?> _userFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialUser != null) {
+      _userFuture = Future.value(widget.initialUser);
+    } else {
+      _userFuture = _loadUser();
+    }
+  }
+
+  Future<UserModel?> _loadUser() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    return await UserRepositoryImpl().getUser(uid);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: Text(
-          'Salom, Muhammad',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: false,
-        actions: [
-          CircleAvatar(
-            backgroundColor: CupertinoTheme.of(context).primaryColor,
-            child: Text('M'),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.of(context).size.height * 0.1,
-        ),
-        child: Column(
-          children: [OwingStatus(), SizedBox(height: 24), RecentSplits()],
-        ),
+      body: FutureBuilder<UserModel?>(
+        future: _userFuture,
+        builder: (context, asyncSnapshot) {
+          if (asyncSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (asyncSnapshot.hasError) {
+            return Center(child: Text(asyncSnapshot.error.toString()));
+          } else if (!asyncSnapshot.hasData || asyncSnapshot.data == null) {
+            return const Center(child: Text("User not found"));
+          } else {
+            final user = asyncSnapshot.data!;
+            return Center(child: Text(user.displayName));
+          }
+        },
       ),
     );
   }
